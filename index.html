@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Jet Game — Joystick + Speed + Missiles</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="hud">
+    <div id="title">Jet Game</div>
+    <div id="controls">
+      <label>Max Speed: <input id="speedSlider" type="range" min="50" max="600" value="300" /></label>
+      <span id="speedValue">300</span> px/s
+      <button id="restartBtn">Restart</button>
+    </div>
+    <div id="status">
+      <span id="score">Score: 0</span>
+      <span id="missiles">Missiles: ∞</span>
+      <span id="gpstatus">Gamepad: none</span>
+    </div>
+    <div id="instructions">
+      Controls:
+      <ul>
+        <li>Gamepad: Left stick rotate/move, Right stick throttle (or left Y for throttle), Button A/0 to fire</li>
+        <li>Keyboard: Arrow keys to rotate/move, W/S throttle, Space to fire</li>
+      </ul>
+    </div>
+  </div>
+  <canvas id="game"></canvas>
+
+  <script src="main.js"></script>
+</body>
+</html>
