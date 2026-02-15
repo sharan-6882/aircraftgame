@@ -3,42 +3,143 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <title>Jet Game — DEBUG</title>
+  <title>Jet Game — Constrained Jet + Missiles + Bomb + Pause</title>
   <style>
-    :root { --bg:#0b1220; --panel:rgba(255,255,255,0.06); --accent:#1fb6ff; --ui-size:110px; --bomb-size:86px; }
-    html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#031225,#061428);color:#dfefff;user-select:none;touch-action:none;}
-    #hud{position:absolute;z-index:40;left:12px;top:12px;padding:10px;background:var(--panel);border-radius:8px;max-width:420px}
-    canvas{display:block;width:100vw;height:100vh;background:transparent; z-index:0}
-    /* touch UI kept minimal for debug */
-    #joyBase { position:fixed; left:18px; bottom:18px; width:110px; height:110px; border-radius:50%; background:rgba(255,255,255,0.03); z-index:45 }
-    #joyKnob { width:48px; height:48px; background:rgba(31,182,255,0.95); border-radius:50%; margin:31px; }
-    #fireBtn { position:fixed; right:18px; bottom:18px; width:110px; height:110px; border-radius:50%; background:#ff8f6b; z-index:45; display:flex; align-items:center; justify-content:center }
-    #debugPanel { position: fixed; right: 12px; top: 12px; background: rgba(0,0,0,0.5); color: #fff; padding:8px; border-radius:6px; z-index:50; font-family:monospace; font-size:13px; }
+    :root { --bg:#0b1220; --panel:rgba(255,255,255,0.05); --accent:#1fb6ff; --ui-size:110px; --bomb-size:86px; }
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;background:linear-gradient(180deg,#031225,#061428);color:#dfefff;-webkit-user-select:none;user-select:none;touch-action:none;}
+    #hud{position:absolute;z-index:20;left:12px;top:12px;padding:10px;background:var(--panel);border-radius:8px;backdrop-filter:blur(6px);max-width:420px}
+    #title{font-weight:700;font-size:18px;color:var(--accent);margin-bottom:6px}
+    #controls{margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #status{font-size:14px;display:flex;gap:12px;margin-bottom:6px}
+    #instructions{font-size:13px;opacity:0.95}
+    canvas{display:block;width:100vw;height:100vh;background:transparent}
+    button, input[type="range"]{vertical-align:middle}
+    /* Touch UI */
+    .touch-ui { position: fixed; bottom: 18px; z-index: 30; }
+    #joyBase {
+      left: 18px;
+      width: var(--ui-size);
+      height: var(--ui-size);
+      background: rgba(255,255,255,0.04);
+      border-radius: 50%;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.02);
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: absolute;
+    }
+    #joyKnob {
+      width: calc(var(--ui-size) * 0.48);
+      height: calc(var(--ui-size) * 0.48);
+      background: rgba(31,182,255,0.95);
+      border-radius: 50%;
+      transform: translate(0,0);
+      transition: transform 0.04s linear;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.45);
+    }
+    #fireBtn {
+      right: 18px;
+      width: var(--ui-size);
+      height: var(--ui-size);
+      background: linear-gradient(180deg,#ff5f6d,#ff9966);
+      border-radius: 50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      color:#112;
+      border: 3px solid rgba(255,255,255,0.08);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+      position: absolute;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #bombBtn {
+      right: 18px;
+      bottom: calc(18px + var(--ui-size) + 12px);
+      width: var(--bomb-size);
+      height: var(--bomb-size);
+      background: linear-gradient(180deg,#ffd54f,#ffb84d);
+      border-radius: 50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-weight:700;
+      color:#112;
+      border: 2px solid rgba(255,255,255,0.06);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45);
+      position: absolute;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #pauseBtn {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      z-index: 40;
+      width: 44px;
+      height: 34px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,0.04);
+      color: #dfefff;
+      font-weight:700;
+    }
+    .touch-label { font-size: 14px; color: rgba(255,255,255,0.9); pointer-events:none; user-select:none; }
+    @media (min-width:900px){ :root{--ui-size:120px; --bomb-size:92px;} }
+    /* Pause overlay */
+    #pauseOverlay { position: fixed; left:0; top:0; width:100%; height:100%; display:flex; align-items:center; justify-content:center; z-index:50; pointer-events:none; }
+    #pauseOverlay .text { color: rgba(255,255,255,0.9); font-size:40px; font-weight:700; text-shadow: 0 6px 24px rgba(0,0,0,0.6); }
   </style>
 </head>
 <body>
   <div id="hud">
-    <div style="font-weight:700; color:var(--accent)">Jet Game — DEBUG</div>
-    <div>Max Speed: <input id="speedSlider" type="range" min="50" max="600" value="300" /></div>
-    <div><button id="restartBtn">Restart</button> <button id="logBtn">Log State</button></div>
-    <div style="margin-top:6px; font-size:13px; opacity:0.9">Controls: Arrow keys / W S / Space; touch joystick / FIRE; gamepad supported</div>
+    <div id="title">Jet Game</div>
+    <div id="controls">
+      <label>Max Speed: <input id="speedSlider" type="range" min="50" max="600" value="300" /></label>
+      <span id="speedValue">300</span> px/s
+      <button id="restartBtn">Restart</button>
+    </div>
+    <div id="status">
+      <span id="score">Score: 0</span>
+      <span id="missiles">Missiles: ∞</span>
+      <span id="bombs">Bombs: 3</span>
+      <span id="gpstatus">Gamepad: none</span>
+    </div>
+    <div id="instructions">
+      Controls:
+      <ul>
+        <li>Touch: Left joystick = steer/throttle (drag up to accelerate), Right FIRE button = missile, BOMB button = special (limited)</li>
+        <li>Keyboard: Arrow keys rotate, W/S throttle, Space = fire, B = bomb, P = pause</li>
+        <li>Gamepad: Left stick rotate, Right stick throttle (or left Y), Button A/0 = fire, Button 1/B = bomb</li>
+      </ul>
+    </div>
   </div>
-
-  <div id="debugPanel">debug: initializing...</div>
 
   <canvas id="game"></canvas>
 
-  <!-- tiny touch UI -->
-  <div id="joyBase"><div id="joyKnob"></div></div>
-  <div id="fireBtn">FIRE</div>
+  <!-- Touch UI elements -->
+  <div id="joyBase" class="touch-ui" aria-hidden="true">
+    <div id="joyKnob"></div>
+  </div>
+
+  <div id="fireBtn" class="touch-ui" aria-hidden="true"><div class="touch-label">FIRE</div></div>
+  <div id="bombBtn" class="touch-ui" aria-hidden="true"><div class="touch-label">BOMB</div></div>
+  <div id="pauseBtn" title="Pause (P)">II</div>
+
+  <div id="pauseOverlay" style="display:none"><div class="text">PAUSED</div></div>
 
   <script>
-  // DEBUG build: draws an obvious red dot for the jet and a debug HUD.
-  (function () {
+  // Jet Game: jet constrained to screen, missiles removed when off-screen (no bouncing), bombs, pause, touch UI.
+  (function(){
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d', { alpha: false });
 
-    function resize() {
+    function resize(){
       const dpr = window.devicePixelRatio || 1;
       const w = Math.max(320, window.innerWidth);
       const h = Math.max(240, window.innerHeight);
@@ -46,172 +147,353 @@
       canvas.style.height = h + 'px';
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      positionTouchUI();
     }
     addEventListener('resize', resize);
     resize();
 
     // UI refs
     const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const scoreEl = document.getElementById('score');
+    const gpstatus = document.getElementById('gpstatus');
     const restartBtn = document.getElementById('restartBtn');
-    const debugPanel = document.getElementById('debugPanel');
-    const logBtn = document.getElementById('logBtn');
+    const bombsEl = document.getElementById('bombs');
+    const pauseOverlay = document.getElementById('pauseOverlay');
+    const pauseBtn = document.getElementById('pauseBtn');
 
     let maxSpeed = Number(speedSlider.value);
-    speedSlider.addEventListener('input', (e) => { maxSpeed = Number(e.target.value); });
-
+    speedValue.textContent = maxSpeed;
+    speedSlider.addEventListener('input', e => { maxSpeed = Number(e.target.value); speedValue.textContent = maxSpeed; });
     restartBtn.addEventListener('click', initGame);
-    logBtn.addEventListener('click', () => console.log('STATE', { jet }));
 
-    // input
+    const TAU = Math.PI*2;
+    function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+    function posMod(n,m){return ((n % m) + m) % m;}
+
+    // Input
     const keys = {};
     window.addEventListener('keydown', e => { keys[e.code] = true; });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
 
-    // simple touch joystick handlers (not full-featured; just set joystick state)
-    const joyBase = document.getElementById('joyBase'), joyKnob = document.getElementById('joyKnob');
+    // Gamepad
+    let gamepadIndex = null;
+    window.addEventListener('gamepadconnected', e => { gamepadIndex = e.gamepad.index; gpstatus.textContent = 'Gamepad: ' + e.gamepad.id; });
+    window.addEventListener('gamepaddisconnected', e => { if (gamepadIndex === e.gamepad.index) gamepadIndex = null; gpstatus.textContent = 'Gamepad: none'; });
+    setInterval(()=> {
+      if (gamepadIndex === null && navigator.getGamepads) {
+        const gps = navigator.getGamepads();
+        for (let i=0;i<gps.length;i++){ if (gps[i]){ gamepadIndex = i; gpstatus.textContent = 'Gamepad: ' + gps[i].id; break; } }
+      }
+    }, 1500);
+
+    // Touch UI
+    const joyBase = document.getElementById('joyBase');
+    const joyKnob = document.getElementById('joyKnob');
     const fireBtn = document.getElementById('fireBtn');
-    const touchState = { joystick: { active: false, id: null, x: 0, y: 0 }, fire: false };
+    const bombBtn = document.getElementById('bombBtn');
 
-    function getBaseParams(el) { const r = el.getBoundingClientRect(); return { cx: r.left + r.width/2, cy: r.top + r.height/2, r: Math.min(r.width, r.height)/2 }; }
+    const touchState = {
+      joystick: { active:false, id:null, x:0, y:0 }, // -1..1
+      fire: false,
+      bomb: false
+    };
 
-    joyBase.addEventListener('pointerdown', ev => { joyBase.setPointerCapture(ev.pointerId); touchState.joystick.active = true; touchState.joystick.id = ev.pointerId; updateJoy(ev.clientX, ev.clientY); });
-    joyBase.addEventListener('pointermove', ev => { if (!touchState.joystick.active || touchState.joystick.id !== ev.pointerId) return; updateJoy(ev.clientX, ev.clientY); });
-    joyBase.addEventListener('pointerup', (ev) => { if (touchState.joystick.id !== ev.pointerId) return; touchState.joystick.active = false; touchState.joystick.id = null; touchState.joystick.x = 0; touchState.joystick.y = 0; joyKnob.style.transform = 'translate(0,0)'; });
-    function updateJoy(px, py) { const p = getBaseParams(joyBase); const nx = (px - p.cx) / p.r; const ny = (py - p.cy) / p.r; touchState.joystick.x = Math.max(-1, Math.min(1, nx)); touchState.joystick.y = Math.max(-1, Math.min(1, ny)); const mvx = touchState.joystick.x * p.r * 0.4; const mvy = touchState.joystick.y * p.r * 0.4; joyKnob.style.transform = `translate(${mvx}px, ${mvy}px)`; }
-
-    fireBtn.addEventListener('pointerdown', ev => { fireBtn.setPointerCapture(ev.pointerId); touchState.fire = true; });
-    fireBtn.addEventListener('pointerup', ev => { touchState.fire = false; try { fireBtn.releasePointerCapture(ev.pointerId); } catch (e) {} });
-
-    // game state
-    let jet = null, missiles = [], targets = [], lastTime = performance.now(), score = 0, spawnTimer = 0;
-    function initGame() {
-      const dpr = window.devicePixelRatio || 1;
-      jet = { x: canvas.width / (2 * dpr), y: canvas.height / (2 * dpr), angle: -Math.PI / 2, vx: 0, vy: 0, radius: 18, cooldown: 0 };
-      missiles = []; targets = []; lastTime = performance.now(); score = 0; spawnTimer = 0;
-      console.log('initGame: center', jet.x, jet.y);
+    function positionTouchUI(){
+      const sz = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ui-size')) || 110;
+      joyBase.style.bottom = '18px';
+      joyBase.style.left = '18px';
+      joyBase.style.width = sz + 'px';
+      joyBase.style.height = sz + 'px';
+      joyKnob.style.width = (sz*0.48) + 'px';
+      joyKnob.style.height = (sz*0.48) + 'px';
+      fireBtn.style.bottom = '18px';
+      fireBtn.style.right = '18px';
+      fireBtn.style.width = sz + 'px';
+      fireBtn.style.height = sz + 'px';
+      bombBtn.style.right = '18px';
+      bombBtn.style.width = (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bomb-size'))||86) + 'px';
+      bombBtn.style.height = (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--bomb-size'))||86) + 'px';
     }
-    initGame();
+    positionTouchUI();
 
-    function spawnTarget() { const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1); const edge = Math.floor(Math.random()*4); let x,y; if (edge===0){ x=-60; y=Math.random()*h } else if (edge===1){ x=w+60; y=Math.random()*h } else if (edge===2){ x=Math.random()*w; y=-60 } else { x=Math.random()*w; y=h+60 } const angle = Math.atan2(h/2 - y, w/2 - x); const speed = 60 + Math.random()*100; targets.push({ x,y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, r: 12 }); }
+    // Joystick handling
+    function getBaseParams(el){
+      const rect = el.getBoundingClientRect();
+      return { cx: rect.left + rect.width/2, cy: rect.top + rect.height/2, r: Math.min(rect.width, rect.height)/2 };
+    }
+    joyBase.addEventListener('pointerdown', (ev)=>{
+      joyBase.setPointerCapture(ev.pointerId);
+      const p = getBaseParams(joyBase);
+      touchState.joystick.active = true;
+      touchState.joystick.id = ev.pointerId;
+      updateJoystickFromPointer(ev.clientX, ev.clientY, p);
+    });
+    joyBase.addEventListener('pointermove', (ev)=>{
+      if (!touchState.joystick.active || touchState.joystick.id !== ev.pointerId) return;
+      const p = getBaseParams(joyBase);
+      updateJoystickFromPointer(ev.clientX, ev.clientY, p);
+    });
+    function endJoy(ev){
+      if (!touchState.joystick.active || touchState.joystick.id !== ev.pointerId) return;
+      touchState.joystick.active = false;
+      touchState.joystick.id = null;
+      touchState.joystick.x = 0; touchState.joystick.y = 0;
+      joyKnob.style.transform = 'translate(0px,0px)';
+    }
+    joyBase.addEventListener('pointerup', endJoy);
+    joyBase.addEventListener('pointercancel', endJoy);
+    joyBase.addEventListener('lostpointercapture', endJoy);
 
-    function fireMissile() { const speed = 420; const nx = Math.cos(jet.angle), ny = Math.sin(jet.angle); const m = { x: jet.x + nx*(jet.radius+6), y: jet.y + ny*(jet.radius+6), vx: jet.vx + nx*speed, vy: jet.vy + ny*speed, life: 4.0 }; missiles.push(m); console.log('FIRE missile', m); }
+    function updateJoystickFromPointer(px, py, baseParams){
+      const dx = px - baseParams.cx;
+      const dy = py - baseParams.cy;
+      const nx = dx / baseParams.r;
+      const ny = dy / baseParams.r;
+      const fx = clamp(nx, -1, 1);
+      const fy = clamp(ny, -1, 1);
+      touchState.joystick.x = fx;
+      touchState.joystick.y = fy;
+      const pxMove = fx * baseParams.r * 0.5;
+      const pyMove = fy * baseParams.r * 0.5;
+      joyKnob.style.transform = `translate(${pxMove}px, ${pyMove}px)`;
+    }
 
-    function update(dt) {
-      if (!jet) return;
-      // input
-      let throttle = 0, turn = 0, fire = false;
-      if (keys['ArrowLeft'] || keys['KeyA']) turn -= 1;
-      if (keys['ArrowRight'] || keys['KeyD']) turn += 1;
+    // Fire button
+    fireBtn.addEventListener('pointerdown', (ev)=>{ fireBtn.setPointerCapture(ev.pointerId); touchState.fire = true; });
+    function endFire(ev){ touchState.fire = false; try{ fireBtn.releasePointerCapture(ev.pointerId); }catch(e){} }
+    fireBtn.addEventListener('pointerup', endFire);
+    fireBtn.addEventListener('pointercancel', endFire);
+    fireBtn.addEventListener('lostpointercapture', endFire);
+
+    // Bomb button
+    bombBtn.addEventListener('pointerdown', (ev)=>{ bombBtn.setPointerCapture(ev.pointerId); touchState.bomb = true; });
+    function endBomb(ev){ touchState.bomb = false; try{ bombBtn.releasePointerCapture(ev.pointerId); }catch(e){} }
+    bombBtn.addEventListener('pointerup', endBomb);
+    bombBtn.addEventListener('pointercancel', endBomb);
+    bombBtn.addEventListener('lostpointercapture', endBomb);
+
+    // Pause handling
+    let paused = false;
+    function setPaused(v){ paused = !!v; pauseOverlay.style.display = paused ? 'flex' : 'none'; }
+    pauseBtn.addEventListener('click', ()=> setPaused(!paused));
+    window.addEventListener('keydown', (e)=> { if (e.code === 'KeyP') setPaused(!paused); });
+
+    // Game objects
+    let jet, missiles, targets, lastTime, score, spawnTimer, bombCount;
+
+    function initGame(){
+      const dpr = window.devicePixelRatio || 1;
+      jet = { x: canvas.width/(2*dpr), y: canvas.height/(2*dpr), angle:-Math.PI/2, vx:0, vy:0, radius:16, acc:600, turnSpeed:4.0, cooldown:0 };
+      missiles = []; targets = []; lastTime = performance.now(); score = 0; spawnTimer = 0; bombCount = 3;
+      bombsEl.textContent = 'Bombs: ' + bombCount;
+      setPaused(false);
+    }
+
+    function spawnTarget(){
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
+      const edge = Math.floor(Math.random()*4);
+      let x, y;
+      if (edge===0){ x=-30; y=Math.random()*h; }
+      else if (edge===1){ x=w+30; y=Math.random()*h; }
+      else if (edge===2){ x=Math.random()*w; y=-30; }
+      else { x=Math.random()*w; y=h+30; }
+      const angle = Math.atan2(h/2 - y, w/2 - x);
+      const speed = 40 + Math.random()*120;
+      targets.push({ x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:14+Math.random()*10, hp:1 });
+    }
+
+    // Bomb effect: destroy targets within radius
+    function detonateBomb(){
+      if (bombCount <= 0) return;
+      bombCount--;
+      bombsEl.textContent = 'Bombs: ' + bombCount;
+      const blastRadius = 120;
+      const cx = jet.x, cy = jet.y;
+      for (let i = targets.length - 1; i >= 0; i--){
+        const t = targets[i];
+        const dx = t.x - cx, dy = t.y - cy;
+        if (dx*dx + dy*dy <= blastRadius*blastRadius){
+          targets.splice(i,1);
+          score += 10;
+        }
+      }
+    }
+
+    function update(dt){
+      if (!jet || paused) return;
+
+      // Input reading
+      let gp = null;
+      if (gamepadIndex !== null && navigator.getGamepads) gp = navigator.getGamepads()[gamepadIndex] || null;
+
+      let throttle = 0; // -1..1
+      let turnInput = 0; // -1..1
+      let firePressed = false;
+      let bombPressed = false;
+
+      // Keyboard
+      if (keys['ArrowLeft'] || keys['KeyA']) turnInput -= 1;
+      if (keys['ArrowRight'] || keys['KeyD']) turnInput += 1;
       if (keys['KeyW']) throttle += 1;
       if (keys['KeyS']) throttle -= 1;
-      if (keys['Space']) fire = true;
+      if (keys['Space']) firePressed = true;
+      if (keys['KeyB']) bombPressed = true;
 
-      // touch joystick
-      if (touchState.joystick.active) { turn = touchState.joystick.x; throttle = -touchState.joystick.y; }
-      if (touchState.fire) fire = true;
-
-      // physics
-      const targetSpeed = throttle * maxSpeed;
-      const fx = Math.cos(jet.angle), fy = Math.sin(jet.angle);
-      const currentAlong = jet.vx*fx + jet.vy*fy;
-      const accel = Math.max(-800, Math.min(800, (targetSpeed - currentAlong) * 4));
-      jet.vx += fx * accel * dt;
-      jet.vy += fy * accel * dt;
-      jet.angle += turn * 3.5 * dt;
-      jet.vx *= 0.994; jet.vy *= 0.994;
-      const spd = Math.hypot(jet.vx, jet.vy);
-      if (spd > maxSpeed * 1.5) { const s = (maxSpeed*1.5)/spd; jet.vx *= s; jet.vy *= s; }
-
-      // move
-      jet.x += jet.vx * dt; jet.y += jet.vy * dt;
-
-      // clamp to screen (jet must NOT leave)
-      const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1);
-      const minX = jet.radius, maxX = Math.max(jet.radius, w - jet.radius);
-      const minY = jet.radius, maxY = Math.max(jet.radius, h - jet.radius);
-      if (jet.x < minX){ jet.x = minX; if (jet.vx < 0) jet.vx = 0; }
-      if (jet.x > maxX){ jet.x = maxX; if (jet.vx > 0) jet.vx = 0; }
-      if (jet.y < minY){ jet.y = minY; if (jet.vy < 0) jet.vy = 0; }
-      if (jet.y > maxY){ jet.y = maxY; if (jet.vy > 0) jet.vy = 0; }
-
-      // firing
-      jet.cooldown -= dt;
-      if (fire && jet.cooldown <= 0) { fireMissile(); jet.cooldown = 0.25; }
-
-      // missiles
-      for (let i = missiles.length-1; i>=0; i--){
-        const m = missiles[i];
-        m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
-        // bounce
-        if (m.x < 0){ m.x = 0; m.vx = -m.vx * 0.9; }
-        if (m.x > w){ m.x = w; m.vx = -m.vx * 0.9; }
-        if (m.y < 0){ m.y = 0; m.vy = -m.vy * 0.9; }
-        if (m.y > h){ m.y = h; m.vy = -m.vy * 0.9; }
-        if (m.life <= 0) missiles.splice(i,1);
+      // Gamepad mapping
+      if (gp){
+        const deadzone = 0.15;
+        const ax = gp.axes[0]||0, ay = gp.axes[1]||0, ry = gp.axes[3]||0;
+        if (Math.abs(ax) > deadzone) turnInput = ax;
+        let throttleAxis = 0;
+        if (Math.abs(ry) > deadzone) throttleAxis = -ry;
+        else if (Math.abs(ay) > deadzone) throttleAxis = -ay;
+        else throttleAxis = throttle;
+        throttle = throttleAxis;
+        if (gp.buttons && gp.buttons[0] && gp.buttons[0].pressed) firePressed = true;
+        if (gp.buttons && gp.buttons[1] && gp.buttons[1].pressed) bombPressed = true;
+        gpstatus.textContent = 'Gamepad: ' + gp.id;
       }
 
-      // targets
-      for (let i = targets.length-1; i>=0; i--){
-        const t = targets[i];
-        t.x += t.vx * dt; t.y += t.vy * dt;
-        if (t.x < -200 || t.y < -200 || t.x > w+200 || t.y > h+200) { targets.splice(i,1); continue; }
-        // collisions with missiles
-        for (let j = missiles.length-1; j>=0; j--){
-          const m = missiles[j];
-          const dx = t.x - m.x, dy = t.y - m.y;
-          if (dx*dx + dy*dy < (t.r+4)*(t.r+4)) { targets.splice(i,1); missiles.splice(j,1); score += 10; break; }
+      // Touch overrides
+      if (touchState.joystick.active){
+        turnInput = touchState.joystick.x;
+        throttle = -touchState.joystick.y;
+      }
+      if (touchState.fire) firePressed = true;
+      if (touchState.bomb) bombPressed = true;
+
+      // Handle bomb
+      if (bombPressed) { detonateBomb(); touchState.bomb = false; }
+
+      // Physics: speed control
+      const targetSpeed = throttle * maxSpeed;
+      const forwardAx = Math.cos(jet.angle), forwardAy = Math.sin(jet.angle);
+      const currentAlong = jet.vx * forwardAx + jet.vy * forwardAy;
+      const speedError = targetSpeed - currentAlong;
+      const accel = clamp(speedError * 4, -jet.acc, jet.acc);
+      jet.vx += forwardAx * accel * dt;
+      jet.vy += forwardAy * accel * dt;
+
+      // Turning
+      jet.angle += turnInput * jet.turnSpeed * dt;
+
+      // Drag
+      jet.vx *= 0.995; jet.vy *= 0.995;
+
+      // Cap
+      const spd = Math.hypot(jet.vx, jet.vy);
+      if (spd > maxSpeed * 1.5) {
+        const s = (maxSpeed * 1.5) / spd;
+        jet.vx *= s; jet.vy *= s;
+      }
+
+      // Move
+      jet.x += jet.vx * dt; jet.y += jet.vy * dt;
+
+      // IMPORTANT: constrain jet inside visible area (no wrapping)
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
+      const minX = jet.radius;
+      const maxX = Math.max(jet.radius, w - jet.radius);
+      const minY = jet.radius;
+      const maxY = Math.max(jet.radius, h - jet.radius);
+
+      // If jet is outside, clamp and remove outward velocity component
+      if (jet.x < minX) {
+        jet.x = minX;
+        if (jet.vx < 0) jet.vx = 0;
+      } else if (jet.x > maxX) {
+        jet.x = maxX;
+        if (jet.vx > 0) jet.vx = 0;
+      }
+      if (jet.y < minY) {
+        jet.y = minY;
+        if (jet.vy < 0) jet.vy = 0;
+      } else if (jet.y > maxY) {
+        jet.y = maxY;
+        if (jet.vy > 0) jet.vy = 0;
+      }
+
+      // Firing
+      jet.cooldown -= dt;
+      if (firePressed && jet.cooldown <= 0) { fireMissile(); jet.cooldown = 0.25; }
+
+      // Missiles update — NO bouncing any more: remove when off-screen or when life ends
+      for (let i = missiles.length - 1; i >= 0; i--) {
+        const m = missiles[i];
+        m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
+        // Remove if off-screen or life expired
+        if (m.life <= 0 || m.x < 0 || m.x > w || m.y < 0 || m.y > h) {
+          missiles.splice(i, 1);
         }
       }
 
-      // spawn
+      // Targets update & collisions
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        t.x += t.vx * dt; t.y += t.vy * dt;
+        if (t.x < -200 || t.y < -200 || t.x > w+200 || t.y > h+200) { targets.splice(i,1); continue; }
+        for (let j = missiles.length - 1; j >= 0; j--) {
+          const m = missiles[j];
+          const dx = t.x - m.x, dy = t.y - m.y;
+          if (dx*dx + dy*dy < (t.r+2)*(t.r+2)) { targets.splice(i,1); missiles.splice(j,1); score += 10; break; }
+        }
+      }
+
+      // Spawn
       spawnTimer += dt;
       if (spawnTimer > 1.0) { spawnTimer = 0; if (targets.length < 6) spawnTarget(); }
 
-      // update debug panel
-      debugPanel.textContent = `jet: x=${Math.round(jet.x)}, y=${Math.round(jet.y)} vx=${jet.vx.toFixed(1)} vy=${jet.vy.toFixed(1)} angle=${jet.angle.toFixed(2)} score=${score} missiles=${missiles.length} targets=${targets.length}`;
+      scoreEl.textContent = 'Score: ' + score;
+      bombsEl.textContent = 'Bombs: ' + bombCount;
     }
 
-    function draw() {
+    function fireMissile(){
+      const speed = 500;
+      const nx = Math.cos(jet.angle), ny = Math.sin(jet.angle);
+      missiles.push({ x: jet.x + nx*(jet.radius+6), y: jet.y + ny*(jet.radius+6), vx: jet.vx + nx*speed, vy: jet.vy + ny*speed, life: 6.0 });
+    }
+
+    // Rendering
+    function draw(){
+      if (!jet) return;
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
+      ctx.fillStyle = '#061428'; ctx.fillRect(0,0,w,h);
+      drawStars();
+      // targets
+      for (const t of targets){ ctx.beginPath(); ctx.fillStyle = '#ff8f8f'; ctx.arc(t.x,t.y,t.r,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.stroke(); }
+      // missiles
+      for (const m of missiles){ ctx.save(); ctx.translate(m.x,m.y); ctx.fillStyle='#ffd89b'; ctx.beginPath(); ctx.arc(0,0,3,0,TAU); ctx.fill(); ctx.restore(); }
+      // jet
+      ctx.save(); ctx.translate(jet.x,jet.y); ctx.rotate(jet.angle);
+      ctx.beginPath(); ctx.moveTo(20,0); ctx.lineTo(-12,10); ctx.lineTo(-8,0); ctx.lineTo(-12,-10); ctx.closePath(); ctx.fillStyle='#9be7ff'; ctx.fill();
+      ctx.beginPath(); ctx.fillStyle='#063c4d'; ctx.ellipse(6,0,5,6,0,0,TAU); ctx.fill();
+      ctx.fillStyle='rgba(255,160,40,0.75)'; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(-22,6); ctx.lineTo(-22,-6); ctx.fill();
+      ctx.restore();
+      // crosshair (center of screen)
+      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(w/2-10,h/2); ctx.lineTo(w/2+10,h/2); ctx.moveTo(w/2,h/2-10); ctx.lineTo(w/2,h/2+10); ctx.stroke();
+    }
+
+    // Background stars
+    const starSeed = [];
+    for (let i=0;i<120;i++) starSeed.push({ x: Math.random()*2000-500, y: Math.random()*2000-500, s: Math.random()*1.6, a: Math.random()*0.6+0.2 });
+    function drawStars(){
       const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1);
-      ctx.fillStyle = '#000'; ctx.fillRect(0,0,w,h); // black background for strong contrast
-      // draw star field (simple)
-      ctx.fillStyle = '#111';
-      for (let i=0;i<60;i++) ctx.fillRect((i*37)%w, (i*53)%h, 1, 1);
-
-      // draw targets
-      for (const t of targets) {
-        ctx.beginPath(); ctx.fillStyle = '#ff8f8f'; ctx.arc(t.x, t.y, t.r, 0, Math.PI*2); ctx.fill();
+      const camX = jet ? jet.x - w/2 : 0, camY = jet ? jet.y - h/2 : 0;
+      for (const s of starSeed){
+        const x = posMod(s.x - camX*0.2, w + 100) + (w*0.05);
+        const y = posMod(s.y - camY*0.2, h + 100) + (h*0.05);
+        ctx.fillStyle = 'rgba(255,255,255,' + s.a + ')';
+        ctx.fillRect(x,y,s.s,s.s);
       }
-
-      // draw missiles
-      for (const m of missiles) {
-        ctx.save(); ctx.translate(m.x, m.y); ctx.fillStyle = '#ffd89b'; ctx.beginPath(); ctx.arc(0,0,3,0,Math.PI*2); ctx.fill(); ctx.restore();
-      }
-
-      // draw a very visible jet marker (red circle + white outline)
-      if (jet) {
-        ctx.save();
-        ctx.translate(jet.x, jet.y);
-        ctx.rotate(jet.angle);
-        // visible big dot
-        ctx.beginPath();
-        ctx.fillStyle = '#ff2d2d';
-        ctx.arc(0, 0, 12, 0, Math.PI*2);
-        ctx.fill();
-        ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-        // small nose indicator
-        ctx.beginPath(); ctx.fillStyle = '#fff'; ctx.arc(14,0,4,0,Math.PI*2); ctx.fill();
-        ctx.restore();
-      }
-
-      // center crosshair
-      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-      ctx.beginPath(); ctx.moveTo(w/2 - 10, h/2); ctx.lineTo(w/2 + 10, h/2); ctx.moveTo(w/2, h/2 - 10); ctx.lineTo(w/2, h/2 + 10); ctx.stroke();
     }
 
-    // animation loop
-    function loop(ts) {
+    // Main loop
+    function loop(ts){
       const dt = Math.min(0.05, (ts - lastTime) / 1000);
       lastTime = ts;
       update(dt);
@@ -219,11 +501,19 @@
       requestAnimationFrame(loop);
     }
 
+    // Start
+    initGame();
     lastTime = performance.now();
     requestAnimationFrame(loop);
 
-    // initial console log
-    console.log('DEBUG build loaded — no errors printed below means rendering ran. If you do not see the red jet marker, paste console output here.');
+    // Keyboard shortcuts for bomb & pause
+    window.addEventListener('keydown', (e)=>{
+      if (e.code === 'KeyB'){ detonateBomb(); }
+      if (e.code === 'KeyP'){ setPaused(!paused); }
+    });
+
+    // Prevent context menu when pressing on touch UI
+    window.addEventListener('contextmenu', e => { if (e.target === joyBase || e.target === fireBtn || e.target === bombBtn) e.preventDefault(); });
 
   })();
   </script>
