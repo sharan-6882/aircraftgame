@@ -4,7 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Jet Game — Joystick + Speed + Missiles</title>
-  <link rel="stylesheet" href="style.css" />
+  <style>
+    :root { --bg:#0b1220; --panel:rgba(255,255,255,0.05); --accent:#1fb6ff; }
+    html,body{height:100%;margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;background:linear-gradient(180deg,#031225,#061428);color:#dfefff}
+    #hud{position:absolute;z-index:10;left:12px;top:12px;padding:10px;background:var(--panel);border-radius:8px;backdrop-filter:blur(6px);max-width:420px}
+    #title{font-weight:700;font-size:18px;color:var(--accent);margin-bottom:6px}
+    #controls{margin-bottom:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    #status{font-size:14px;display:flex;gap:12px;margin-bottom:6px}
+    #instructions{font-size:13px;opacity:0.9}
+    canvas{display:block;width:100vw;height:100vh;background:transparent}
+    button{background:rgba(255,255,255,0.06);color:inherit;border:1px solid rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px;cursor:pointer}
+    input[type="range"]{vertical-align:middle}
+  </style>
 </head>
 <body>
   <div id="hud">
@@ -22,13 +33,201 @@
     <div id="instructions">
       Controls:
       <ul>
-        <li>Gamepad: Left stick rotate/move, Right stick throttle (or left Y for throttle), Button A/0 to fire</li>
-        <li>Keyboard: Arrow keys to rotate/move, W/S throttle, Space to fire</li>
+        <li>Gamepad: Left stick rotate, Right stick throttle (or left Y), Button A/0 to fire</li>
+        <li>Keyboard: Arrow keys to rotate, W/S throttle, Space to fire</li>
       </ul>
     </div>
   </div>
   <canvas id="game"></canvas>
 
-  <script src="main.js"></script>
+  <script>
+  // Inlined JS - improved and self-contained (same logic as previous main.js)
+  (function(){
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    function resize(){
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.max(320, window.innerWidth);
+      const h = Math.max(240, window.innerHeight);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    addEventListener('resize', resize);
+    resize();
+
+    const speedSlider = document.getElementById('speedSlider');
+    const speedValue = document.getElementById('speedValue');
+    const scoreEl = document.getElementById('score');
+    const gpstatus = document.getElementById('gpstatus');
+    const restartBtn = document.getElementById('restartBtn');
+
+    let maxSpeed = Number(speedSlider.value);
+    speedValue.textContent = maxSpeed;
+    speedSlider.addEventListener('input', e => { maxSpeed = Number(e.target.value); speedValue.textContent = maxSpeed; });
+    restartBtn.addEventListener('click', initGame);
+
+    const TAU = Math.PI*2;
+    function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+    function posMod(n,m){return ((n % m) + m) % m}
+
+    const keys = {};
+    window.addEventListener('keydown', e => { keys[e.code] = true; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    let gamepadIndex = null;
+    window.addEventListener('gamepadconnected', e => { gamepadIndex = e.gamepad.index; gpstatus.textContent = 'Gamepad: ' + e.gamepad.id; });
+    window.addEventListener('gamepaddisconnected', e => { if (gamepadIndex === e.gamepad.index) gamepadIndex = null; gpstatus.textContent = 'Gamepad: none'; });
+
+    setInterval(()=> {
+      if (gamepadIndex === null && navigator.getGamepads) {
+        const gps = navigator.getGamepads();
+        for (let i=0;i<gps.length;i++){ if (gps[i]){ gamepadIndex = i; gpstatus.textContent = 'Gamepad: ' + gps[i].id; break; } }
+      }
+    }, 1500);
+
+    let jet, missiles, targets, lastTime, score, spawnTimer;
+
+    function initGame(){
+      const dpr = window.devicePixelRatio || 1;
+      jet = { x: canvas.width/(2*dpr), y: canvas.height/(2*dpr), angle:-Math.PI/2, vx:0, vy:0, radius:16, acc:600, turnSpeed:4.0, cooldown:0 };
+      missiles = []; targets = []; lastTime = performance.now(); score = 0; spawnTimer = 0;
+    }
+
+    function spawnTarget(){
+      const w = canvas.width / (window.devicePixelRatio || 1);
+      const h = canvas.height / (window.devicePixelRatio || 1);
+      const edge = Math.floor(Math.random()*4);
+      let x, y;
+      if (edge===0){ x=-30; y=Math.random()*h; }
+      else if (edge===1){ x=w+30; y=Math.random()*h; }
+      else if (edge===2){ x=Math.random()*w; y=-30; }
+      else { x=Math.random()*w; y=h+30; }
+      const angle = Math.atan2(h/2 - y, w/2 - x);
+      const speed = 40 + Math.random()*120;
+      targets.push({ x,y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed, r:14+Math.random()*10, hp:1 });
+    }
+
+    function update(dt){
+      if (!jet) return;
+      let gp = null;
+      if (gamepadIndex !== null && navigator.getGamepads) {
+        gp = navigator.getGamepads()[gamepadIndex] || null;
+      }
+
+      let throttle = 0, turnInput = 0, firePressed = false;
+      if (keys['ArrowLeft']||keys['KeyA']) turnInput -= 1;
+      if (keys['ArrowRight']||keys['KeyD']) turnInput += 1;
+      if (keys['KeyW']) throttle += 1;
+      if (keys['KeyS']) throttle -= 1;
+      if (keys['Space']) firePressed = true;
+
+      if (gp){
+        const deadzone = 0.15;
+        const ax = gp.axes[0]||0, ay = gp.axes[1]||0, ry = gp.axes[3]||0;
+        if (Math.abs(ax) > deadzone) turnInput = ax;
+        let throttleAxis = 0;
+        if (Math.abs(ry) > deadzone) throttleAxis = -ry;
+        else if (Math.abs(ay) > deadzone) throttleAxis = -ay;
+        else throttleAxis = throttle;
+        throttle = throttleAxis;
+        if (gp.buttons && gp.buttons[0] && gp.buttons[0].pressed) firePressed = true;
+        gpstatus.textContent = 'Gamepad: ' + gp.id;
+      }
+
+      const targetSpeed = throttle * maxSpeed;
+      const forwardAx = Math.cos(jet.angle), forwardAy = Math.sin(jet.angle);
+      const currentAlong = jet.vx * forwardAx + jet.vy * forwardAy;
+      const speedError = targetSpeed - currentAlong;
+      const accel = clamp(speedError * 4, -jet.acc, jet.acc);
+      jet.vx += forwardAx * accel * dt;
+      jet.vy += forwardAy * accel * dt;
+
+      jet.angle += turnInput * jet.turnSpeed * dt;
+      jet.vx *= 0.995; jet.vy *= 0.995;
+      const spd = Math.hypot(jet.vx, jet.vy);
+      if (spd > maxSpeed * 1.5){ const s = (maxSpeed * 1.5)/spd; jet.vx *= s; jet.vy *= s; }
+
+      jet.x += jet.vx * dt; jet.y += jet.vy * dt;
+      const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1);
+      if (jet.x < -40) jet.x = w + 40;
+      if (jet.x > w + 40) jet.x = -40;
+      if (jet.y < -40) jet.y = h + 40;
+      if (jet.y > h + 40) jet.y = -40;
+
+      jet.cooldown -= dt;
+      if (firePressed && jet.cooldown <= 0){ fireMissile(); jet.cooldown = 0.25; }
+
+      for (let i = missiles.length-1; i>=0; i--){
+        const m = missiles[i];
+        m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt;
+        if (m.life <= 0 || m.x < -50 || m.x > w+50 || m.y < -50 || m.y > h+50) missiles.splice(i,1);
+      }
+
+      for (let i = targets.length-1; i>=0; i--){
+        const t = targets[i];
+        t.x += t.vx * dt; t.y += t.vy * dt;
+        if (t.x < -200 || t.y < -200 || t.x > w+200 || t.y > h+200){ targets.splice(i,1); continue; }
+        for (let j = missiles.length-1; j>=0; j--){
+          const m = missiles[j];
+          const dx = t.x - m.x, dy = t.y - m.y;
+          if (dx*dx + dy*dy < (t.r+2)*(t.r+2)){ targets.splice(i,1); missiles.splice(j,1); score += 10; break; }
+        }
+      }
+
+      spawnTimer += dt;
+      if (spawnTimer > 1.0){ spawnTimer = 0; if (targets.length < 6) spawnTarget(); }
+      scoreEl.textContent = 'Score: ' + score;
+    }
+
+    function fireMissile(){
+      const speed = 500;
+      const nx = Math.cos(jet.angle), ny = Math.sin(jet.angle);
+      missiles.push({ x: jet.x + nx*(jet.radius+6), y: jet.y + ny*(jet.radius+6), vx: jet.vx + nx*speed, vy: jet.vy + ny*speed, life: 3.0 });
+    }
+
+    function draw(){
+      if (!jet) return;
+      const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1);
+      ctx.fillStyle = '#061428'; ctx.fillRect(0,0,w,h);
+      drawStars();
+      for (const t of targets){ ctx.beginPath(); ctx.fillStyle = '#ff8f8f'; ctx.arc(t.x,t.y,t.r,0,TAU); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.stroke(); }
+      for (const m of missiles){ ctx.save(); ctx.translate(m.x,m.y); ctx.fillStyle='#ffd89b'; ctx.beginPath(); ctx.arc(0,0,3,0,TAU); ctx.fill(); ctx.restore(); }
+      ctx.save(); ctx.translate(jet.x,jet.y); ctx.rotate(jet.angle);
+      ctx.beginPath(); ctx.moveTo(20,0); ctx.lineTo(-12,10); ctx.lineTo(-8,0); ctx.lineTo(-12,-10); ctx.closePath(); ctx.fillStyle='#9be7ff'; ctx.fill();
+      ctx.beginPath(); ctx.fillStyle='#063c4d'; ctx.ellipse(6,0,5,6,0,0,TAU); ctx.fill();
+      ctx.fillStyle='rgba(255,160,40,0.75)'; ctx.beginPath(); ctx.moveTo(-12,0); ctx.lineTo(-22,6); ctx.lineTo(-22,-6); ctx.fill(); ctx.restore();
+      ctx.strokeStyle='rgba(255,255,255,0.06)'; ctx.beginPath(); ctx.moveTo(w/2-10,h/2); ctx.lineTo(w/2+10,h/2); ctx.moveTo(w/2,h/2-10); ctx.lineTo(w/2,h/2+10); ctx.stroke();
+    }
+
+    const starSeed = [];
+    for (let i=0;i<120;i++) starSeed.push({ x: Math.random()*2000-500, y: Math.random()*2000-500, s: Math.random()*1.6, a: Math.random()*0.6+0.2 });
+    function drawStars(){
+      const w = canvas.width / (window.devicePixelRatio || 1), h = canvas.height / (window.devicePixelRatio || 1);
+      const camX = jet ? jet.x - w/2 : 0, camY = jet ? jet.y - h/2 : 0;
+      for (const s of starSeed){
+        const x = posMod(s.x - camX*0.2, w + 100) + (w*0.05);
+        const y = posMod(s.y - camY*0.2, h + 100) + (h*0.05);
+        ctx.fillStyle = 'rgba(255,255,255,' + s.a + ')';
+        ctx.fillRect(x,y,s.s,s.s);
+      }
+    }
+
+    function loop(ts){
+      const dt = Math.min(0.05,(ts - lastTime)/1000);
+      lastTime = ts;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    initGame();
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+  })();
+  </script>
 </body>
 </html>
